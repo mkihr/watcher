@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: alpha
+spec:
+  serviceName: "alpha"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alpha
+  template:
+    metadata:
+      labels:
+        app: alpha
+      annotations:
+        restartTimestamp: "0"
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: main
+        image: ubuntu:latest
+        command: ["sh", "-c", "tail -f /dev/null"]
+        resources:
+          limits:
+            memory: "32Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: log
+          mountPath: /mnt/log
+      initContainers:
+      - name: init
+        image: busybox
+        command:
+          - sh
+          - -c
+          - "echo Init alpha at $(date) > /mnt/log/init.txt"
+        volumeMounts:
+        - name: log
+          mountPath: /mnt/log
+      volumes:
+      - name: log
+        emptyDir: {}

@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sts-restart-watcher
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sts-restart-watcher
+  template:
+    metadata:
+      labels:
+        app: sts-restart-watcher
+    spec:
+      serviceAccountName: sts-watcher
+      #imagePullSecrets:
+      #- name: dockerio
+      containers:
+      - name: watcher
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        image: mkihr1/sts-restart-watcher:amd64
+        imagePullPolicy: Always
+        env:
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: TARGET_STS
+          value: alpha,beta
+        - name: DEBUG
+          value: "true"
+        - name: SLEEP_SECONDS
+          value: "10"
