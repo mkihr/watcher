@@ -35,7 +35,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: yourdockerhubuser/watcher
+        images: ${{ secrets.DOCKERHUB_USER }}/watcher
         tags: |
           # For release
           type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
@@ -49,7 +49,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: ${{ secrets.DOCKERHUB_USER }}/watcher:${{ steps.meta.outputs.tags }}
+        tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
 
     - name: Show tags
