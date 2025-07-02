@@ -1,3 +1,19 @@
+# This GitHub Actions workflow automates the process of building and pushing a Docker image
+# for the repository. It is triggered on push or pull request events to the "main" branch.
+#
+# Workflow Steps:
+# 1. Checks out the repository code.
+# 2. Sets a DATE_TAG environment variable with the current date (YYYYMMDD format) for tagging the image.
+# 3. Logs in to Docker Hub using a secret token.
+# 4. Builds the Docker image with two tags: "latest" and the current date.
+# 5. Pushes both the "latest" and date-tagged images to Docker Hub.
+#
+# Secrets Required:
+# - DOCKERHUB_TOKEN: Docker Hub access token stored in repository secrets.
+#
+# Image Tags:
+# - mkihr1/watcher:latest
+# - mkihr1/watcher:<YYYYMMDD>
 name: Docker Image CI
 
 on:
