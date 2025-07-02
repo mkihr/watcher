@@ -1,15 +1,48 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Example function to test OOMKilled/restart detection logic
+// MockKubeClient implements the KubeClient interface for testing
+type MockKubeClient struct {
+	Pods                []corev1.Pod
+	StatefulSets        map[string]*appsv1.StatefulSet
+	UpdateCalledFor     []string
+	GetStatefulSetError error
+	UpdateError         error
+}
+
+func (m *MockKubeClient) ListPods(ctx context.Context, ns string) ([]corev1.Pod, error) {
+	return m.Pods, nil
+}
+func (m *MockKubeClient) GetStatefulSet(ctx context.Context, ns, name string) (*appsv1.StatefulSet, error) {
+	if m.GetStatefulSetError != nil {
+		return nil, m.GetStatefulSetError
+	}
+	sts, ok := m.StatefulSets[name]
+	if !ok {
+		return nil, nil
+	}
+	return sts, nil
+}
+func (m *MockKubeClient) UpdateStatefulSet(ctx context.Context, ns string, sts *appsv1.StatefulSet) error {
+	m.UpdateCalledFor = append(m.UpdateCalledFor, sts.Name)
+	if m.UpdateError != nil {
+		return m.UpdateError
+	}
+	m.StatefulSets[sts.Name] = sts
+	return nil
+}
+
+// --- Unit Tests ---
+
 func TestNeedsRestart(t *testing.T) {
+	// OOMKilled pod
 	pods := []corev1.Pod{
 		{
 			Status: corev1.PodStatus{
@@ -20,6 +53,21 @@ func TestNeedsRestart(t *testing.T) {
 								Reason: "OOMKilled",
 							},
 						},
+					},
+				},
+			},
+		},
+	}
+	if !needsRestart(pods) {
+		t.Error("Expected needsRestart to return true for OOMKilled pod")
+	}
+
+	// ExitCode 137 pod
+	pods = []corev1.Pod{
+		{
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
 						RestartCount: 1,
 						LastTerminationState: corev1.ContainerState{
 							Terminated: &corev1.ContainerStateTerminated{
@@ -32,16 +80,16 @@ func TestNeedsRestart(t *testing.T) {
 		},
 	}
 	if !needsRestart(pods) {
-		t.Error("Expected needsRestart to return true for OOMKilled pod")
+		t.Error("Expected needsRestart to return true for ExitCode 137 pod")
 	}
 
-	// Test with healthy pod
+	// Healthy pod
 	pods = []corev1.Pod{
 		{
 			Status: corev1.PodStatus{
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
-						State: corev1.ContainerState{},
+						State:        corev1.ContainerState{},
 						RestartCount: 0,
 					},
 				},
@@ -53,18 +101,30 @@ func TestNeedsRestart(t *testing.T) {
 	}
 }
 
-// Example implementation you would need in watcher.go
-func needsRestart(pods []corev1.Pod) bool {
-	for _, pod := range pods {
-		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.State.Terminated != nil && cs.State.Terminated.Reason == "OOMKilled" {
-				return true
-			}
-			if cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil &&
-				cs.LastTerminationState.Terminated.ExitCode == 137 {
-				return true
-			}
-		}
+func TestRestartStatefulSets(t *testing.T) {
+	mock := &MockKubeClient{
+		StatefulSets: map[string]*appsv1.StatefulSet{
+			"foo": {
+				ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{},
+						},
+					},
+				},
+			},
+		},
 	}
-	return false
+	targets := []string{"foo"}
+	ctx := context.Background()
+	restartStatefulSets(ctx, mock, "default", targets, false)
+	if len(mock.UpdateCalledFor) != 1 || mock.UpdateCalledFor[0] != "foo" {
+		t.Errorf("Expected UpdateStatefulSet to be called for 'foo', got %v", mock.UpdateCalledFor)
+	}
+	// Check annotation
+	sts := mock.StatefulSets["foo"]
+	if sts.Spec.Template.Annotations["restartTimestamp"] == "" {
+		t.Errorf("Expected restartTimestamp annotation to be set")
+	}
 }
