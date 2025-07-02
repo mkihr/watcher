@@ -1,53 +1,59 @@
-# This GitHub Actions workflow automates the process of building and pushing a Docker image
-# for the repository. It is triggered on push or pull request events to the "main" branch.
-#
-# Workflow Steps:
-# 1. Checks out the repository code.
-# 2. Sets a DATE_TAG environment variable with the current date (YYYYMMDD format) for tagging the image.
-# 3. Logs in to Docker Hub using a secret token.
-# 4. Builds the Docker image with two tags: "latest" and the current date.
-# 5. Pushes both the "latest" and date-tagged images to Docker Hub.
-#
-# Secrets Required:
-# - DOCKERHUB_TOKEN: Docker Hub access token stored in repository secrets.
-#
-# Image Tags:
-# - mkihr1/watcher:latest
-# - mkihr1/watcher:<YYYYMMDD>
 name: Docker Image CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+  release:
+    types: [published]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Docker image tags
-      id: vars
-      run: echo "DATE_TAG=$(date +'%Y%m%d')" >> $GITHUB_ENV
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Docker Hub
+    - name: Log in to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Extract metadata (tags, labels)
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: yourdockerhubuser/watcher
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha
+          # Custom tags for push/pull_request
+          type=raw,value=ci_latest,enable={{is_pr||is_push}}
+          type=raw,value=${{ github.run_id }}-${{ github.run_number }},enable={{is_pr||is_push}}
+          # For release
+          type=semver,pattern={{version}},enable={{is_release}}
+          type=raw,value=latest,enable={{is_release}}
       env:
-        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      run: echo "$DOCKERHUB_TOKEN" | docker login -u mkihr1 --password-stdin
+        is_pr: ${{ github.event_name == 'pull_request' }}
+        is_push: ${{ github.event_name == 'push' }}
+        is_release: ${{ github.event_name == 'release' }}
 
-    - name: Build the Docker image
-      run: |
-        docker build . --file Dockerfile \
-          --tag mkihr1/watcher:latest \
-          --tag mkihr1/watcher:${{ env.DATE_TAG }}
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
 
-    - name: Push Docker image (latest)
-      run: docker push mkihr1/watcher:latest
-
-    - name: Push Docker image (date tag)
-      run: docker push mkihr1/watcher:${{ env.DATE_TAG }}
+    # Optionally, output the tags
+    - name: Show tags
+      run: echo "${{ steps.meta.outputs.tags }}"
