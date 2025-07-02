@@ -1,21 +1,37 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: beta
+spec:
+  serviceName: "beta"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: beta
+  template:
+    metadata:
+      labels:
+        app: beta
+      annotations:
+        restartTimestamp: "0"
+    spec:
+      terminationGracePeriodSeconds: 5
       containers:
         - name: main
           image: ubuntu:latest
-          command: ["sh", "-c", "tail -f /dev/null"]
+          command: ["sh", "-c", "touch /tmp/healthy; while true; do sleep 5; done"]
           resources:
             limits:
               memory: "32Mi"
           volumeMounts:
             - name: log
               mountPath: /mnt/log
-        - name: probe-test
-          image: busybox
-          command: ["sh", "-c", "while true; do if [ -f /tmp/fail ]; then exit 1; fi; sleep 2; done"]
           readinessProbe:
             exec:
               command:
-                - cat
-                - /mnt/log/init.txt
+                - sh
+                - -c
+                - "test -f /tmp/healthy"
             initialDelaySeconds: 2
             periodSeconds: 5
           livenessProbe:
@@ -23,16 +39,19 @@
               command:
                 - sh
                 - -c
-                - "[ ! -f /tmp/fail ]"
+                - "test ! -f /tmp/fail"
             initialDelaySeconds: 2
             periodSeconds: 5
       initContainers:
-        - name: init
-          image: busybox
-          command:
-            - sh
-            - -c
-            - "echo Init beta at $(date) > /mnt/log/init.txt"
-          volumeMounts:
-            - name: log
-              mountPath: /mnt/log
+      - name: init
+        image: busybox
+        command:
+          - sh
+          - -c
+          - "echo Init beta at $(date) > /mnt/log/init.txt"
+        volumeMounts:
+        - name: log
+          mountPath: /mnt/log
+      volumes:
+      - name: log
+        emptyDir: {}
