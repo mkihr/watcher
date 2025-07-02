@@ -1,3 +1,22 @@
+# This YAML manifest defines Kubernetes RBAC resources for a watcher application:
+# 
+# 1. ServiceAccount:
+#    - Name: sts-watcher
+#    - Namespace: default
+#    - Used to associate the watcher application's pods with specific permissions.
+#
+# 2. Role:
+#    - Name: sts-watcher-role
+#    - Namespace: default
+#    - Grants permissions within the "default" namespace:
+#      * Allows "get" and "list" actions on "pods" resources in the core API group.
+#      * Allows "get", "list", and "update" actions on "statefulsets" resources in the "apps" API group.
+#
+# 3. RoleBinding:
+#    - Name: sts-watcher-bind
+#    - Namespace: default
+#    - Binds the "sts-watcher" ServiceAccount to the "sts-watcher-role" Role,
+#      enabling the ServiceAccount to perform the specified actions on pods and statefulsets in the namespace.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

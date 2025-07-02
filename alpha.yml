@@ -1,3 +1,28 @@
+# This StatefulSet manifest defines the deployment of a single replica of the "alpha" application.
+# 
+# Key components:
+# - apiVersion: Specifies the Kubernetes API version for StatefulSet.
+# - kind: Declares this resource as a StatefulSet.
+# - metadata.name: Names the StatefulSet "alpha".
+# - spec.serviceName: Associates the StatefulSet with the "alpha" headless service.
+# - spec.replicas: Sets the number of pod replicas to 1.
+# - spec.selector: Selects pods with the label "app: alpha".
+# - spec.template: Defines the pod template for the StatefulSet.
+#   - metadata.labels: Labels pods with "app: alpha".
+#   - metadata.annotations.restartTimestamp: Custom annotation for tracking restarts.
+#   - spec.terminationGracePeriodSeconds: Sets pod termination grace period to 5 seconds.
+#   - spec.containers: Main application container:
+#     - name: "main"
+#     - image: "ubuntu:latest"
+#     - command: Keeps the container running with "tail -f /dev/null".
+#     - resources: Limits memory to 32Mi and CPU to 100m.
+#     - volumeMounts: Mounts the "log" volume at "/mnt/log".
+#   - spec.initContainers: Initialization container:
+#     - name: "init"
+#     - image: "busybox"
+#     - command: Writes an initialization message with a timestamp to "/mnt/log/init.txt".
+#     - volumeMounts: Mounts the "log" volume at "/mnt/log".
+#   - spec.volumes: Defines an "emptyDir" volume named "log" for temporary storage shared between containers.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

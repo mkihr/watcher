@@ -60,6 +60,10 @@ func needsRestart(pods []corev1.Pod) bool {
 	return false
 }
 
+// restartStatefulSets restarts the specified StatefulSets in the given namespace by updating their pod template
+// annotations with a new "restartTimestamp". This triggers Kubernetes to perform a rolling restart of the pods.
+// It uses the provided KubeClient interface to fetch and update StatefulSets. If debug is true, informational
+// messages are printed to the console. Errors encountered during get or update operations are logged.
 func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets []string, debug bool) {
 	ts := fmt.Sprintf("%d", time.Now().Unix())
 	for _, name := range targets {
