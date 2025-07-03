@@ -1,0 +1,93 @@
+name: Docker Multi-Arch CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+
+    env:
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USER }}/watcher
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USER }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Set date tag (for CI)
+      if: github.event_name != 'release'
+      run: echo "DATETAG=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.IMAGE_NAME }}
+        tags: |
+          # Release: v1.2.3, latest
+          type=semver,pattern={{version}}-${{ matrix.arch }},enable=${{ github.event_name == 'release' }}
+          type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+          type=raw,value=latest-${{ matrix.arch }},enable=${{ github.event_name == 'release' }}
+          type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+
+          # CI builds (push / PR)
+          type=raw,value=ci_latest-${{ matrix.arch }},enable=${{ github.event_name != 'release' }}
+          type=raw,value=ci_latest,enable=${{ github.event_name != 'release' }}
+          type=raw,value=${{ env.DATETAG }}-${{ matrix.arch }},enable=${{ github.event_name != 'release' }}
+
+    - name: Build and push per arch
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/${{ matrix.arch }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          TARGETARCH=${{ matrix.arch }}
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+    - name: Log in to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USER }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Create and push multi-arch manifest
+      run: |
+        # Tags vorbereiten
+        TAGS="ci_latest"
+        if [[ '${{ github.event_name }}' == 'release' ]]; then
+          VERSION=${GITHUB_REF##*/}
+          TAGS="$VERSION latest"
+        fi
+
+        for tag in $TAGS; do
+          docker buildx imagetools create \
+            -t ${{ secrets.DOCKERHUB_USER }}/watcher:$tag \
+            ${{ secrets.DOCKERHUB_USER }}/watcher:$tag-amd64 \
+            ${{ secrets.DOCKERHUB_USER }}/watcher:$tag-arm64
+        done
