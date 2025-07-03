@@ -119,7 +119,7 @@ func TestRestartStatefulSets(t *testing.T) {
 	}
 	targets := []string{"foo"}
 	ctx := context.Background()
-	restartStatefulSets(ctx, mock, "default", targets, false)
+	restartStatefulSets(ctx, mock, "default", targets, 30, false)
 	if len(mock.UpdateCalledFor) != 1 || mock.UpdateCalledFor[0] != "foo" {
 		t.Errorf("Expected UpdateStatefulSet to be called for 'foo', got %v", mock.UpdateCalledFor)
 	}
