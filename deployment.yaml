@@ -25,7 +25,7 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
-        image: mkihr1/sts-restart-watcher:amd64
+        image: mkihr1/watcher:ci_latest-arm64
         imagePullPolicy: Always
         env:
         - name: WATCH_NAMESPACE
@@ -38,3 +38,5 @@ spec:
           value: "true"
         - name: SLEEP_SECONDS
           value: "10"
+        - name: RESTART_DELAY_SECONDS
+          value: "30"

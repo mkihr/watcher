@@ -85,7 +85,7 @@ func (r *RealKubeClient) UpdateStatefulSet(ctx context.Context, ns string, sts *
 func needsRestart(pods []corev1.Pod, debug bool) bool {
 	for _, pod := range pods {
 		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.State.Terminated != nil {
+			if cs.State.Terminated != nil || (cs.LastTerminationState.Terminated != nil && cs.RestartCount > 0) {
 				if debug {
 					fmt.Printf("[DEBUG] Pod %s, Container %s: ExitCode=%d, Reason=%s\n",
 						pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
@@ -107,7 +107,7 @@ func needsRestart(pods []corev1.Pod, debug bool) bool {
 // annotations with a new "restartTimestamp". This triggers Kubernetes to perform a rolling restart of the pods.
 // It uses the provided KubeClient interface to fetch and update StatefulSets. If debug is true, informational
 // messages are printed to the console. Errors encountered during get or update operations are logged.
-func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets []string, debug bool) {
+func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets []string, delaySeconds int, debug bool) {
 	ts := fmt.Sprintf("%d", time.Now().Unix())
 	for i, name := range targets {
 		sts, err := kc.GetStatefulSet(ctx, ns, name)
@@ -131,16 +131,16 @@ func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets 
 		// Delay for 3 minutes after the first target before restarting others
 		if i == 0 && len(targets) > 1 {
 			if debug {
-				fmt.Println("[INFO] Waiting 3 minutes before restarting next StatefulSet...")
+				fmt.Println("[INFO] Waiting ", delaySeconds, " seconds before restarting next StatefulSet...")
 			}
-			time.Sleep(3 * time.Minute)
+			time.Sleep(time.Duration(delaySeconds))
 		}
 	}
 }
 
 // -- Main loop, now using the above functions
 
-func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string, sleepSeconds int, debug bool) {
+func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string, sleepSeconds int, delaySeconds int, debug bool) {
 	for {
 		if debug {
 			fmt.Println("[INFO] Checking pods in namespace:", ns)
@@ -152,7 +152,7 @@ func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string,
 		}
 
 		if needsRestart(pods, debug) {
-			restartStatefulSets(ctx, kc, ns, targets, debug)
+			restartStatefulSets(ctx, kc, ns, targets, delaySeconds, debug)
 		} else if debug {
 			fmt.Println("[INFO] No restart needed.")
 		}
@@ -171,6 +171,7 @@ func main() {
 	debug := getenv("DEBUG", "false") == "true"
 	targets := strings.Split(os.Getenv("TARGET_STS"), ",")
 	sleepSeconds, _ := strconv.Atoi(getenv("SLEEP_SECONDS", "30"))
+	delaySeconds, _ := strconv.Atoi(getenv("RESTART_DELAY_SECONDS", "30"))
 
 	config, err := getKubeConfig()
 	if err != nil {
@@ -184,7 +185,7 @@ func main() {
 
 	kc := &RealKubeClient{Client: clientset}
 	ctx := context.TODO()
-	runWatcher(ctx, kc, ns, targets, sleepSeconds, debug)
+	runWatcher(ctx, kc, ns, targets, sleepSeconds, delaySeconds, debug)
 }
 
 // -- Other helpers unchanged (getenv, getKubeConfig)

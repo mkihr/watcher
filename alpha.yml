@@ -49,6 +49,9 @@ spec:
           limits:
             memory: "32Mi"
             cpu: "100m"
+          requests:
+            memory: "32Mi"
+            cpu: "100m"
         volumeMounts:
         - name: log
           mountPath: /mnt/log
@@ -64,4 +67,4 @@ spec:
           mountPath: /mnt/log
       volumes:
       - name: log
-        emptyDir: {}
+        emptyDir: { medium: "Memory" }
