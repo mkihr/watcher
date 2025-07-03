@@ -59,7 +59,7 @@ func TestNeedsRestart(t *testing.T) {
 			},
 		},
 	}
-	if !needsRestart(pods) {
+	if !needsRestart(pods, true) {
 		t.Error("Expected needsRestart to return true for OOMKilled pod")
 	}
 
