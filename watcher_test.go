@@ -80,7 +80,7 @@ func TestNeedsRestart(t *testing.T) {
 			},
 		},
 	}
-	if !needsRestart(pods) {
+	if !needsRestart(pods, true) {
 		t.Error("Expected needsRestart to return true for ExitCode 137 pod")
 	}
 
@@ -97,7 +97,7 @@ func TestNeedsRestart(t *testing.T) {
 			},
 		},
 	}
-	if needsRestart(pods) {
+	if needsRestart(pods, true) {
 		t.Error("Expected needsRestart to return false for healthy pod")
 	}
 }
