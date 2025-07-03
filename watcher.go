@@ -85,7 +85,7 @@ func (r *RealKubeClient) UpdateStatefulSet(ctx context.Context, ns string, sts *
 func needsRestart(pods []corev1.Pod, debug bool) bool {
 	for _, pod := range pods {
 		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.State.Terminated != nil || (cs.LastTerminationState.Terminated != nil && cs.RestartCount > 0) {
+			if cs.State.Terminated != nil {
 				if debug {
 					fmt.Printf("[DEBUG] Pod %s, Container %s: ExitCode=%d, Reason=%s\n",
 						pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
@@ -94,8 +94,11 @@ func needsRestart(pods []corev1.Pod, debug bool) bool {
 					return true
 				}
 			}
-			if cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil &&
-				cs.LastTerminationState.Terminated.ExitCode == 137 {
+			if cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
+				if debug {
+					fmt.Printf("[DEBUG] Pod %s, Container %s: ExitCode=%d, Reason=%s\n",
+						pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
+				}
 				return true
 			}
 		}
