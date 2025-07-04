@@ -97,7 +97,7 @@ func needsRestart(pods []corev1.Pod, debug bool) bool {
 			if cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
 				if debug {
 					fmt.Printf("[DEBUG] Pod %s, Container %s: ExitCode=%d, Reason=%s\n",
-						pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
+						pod.Name, cs.Name, cs.LastTerminationState.Terminated.ExitCode, cs.LastTerminationState.Terminated.Reason)
 				}
 				return true
 			}
