@@ -131,12 +131,12 @@ func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets 
 			fmt.Println("[INFO] Restarted", name)
 		}
 
-		// Delay for 3 minutes after the first target before restarting others
+		// Delay for delaySeconds after the first target before restarting others
 		if i == 0 && len(targets) > 1 {
 			if debug {
 				fmt.Println("[INFO] Waiting ", delaySeconds, " seconds before restarting next StatefulSet...")
 			}
-			time.Sleep(time.Duration(delaySeconds))
+			time.Sleep(time.Duration(delaySeconds) * time.Second)
 		}
 	}
 }

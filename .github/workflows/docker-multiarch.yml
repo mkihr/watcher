@@ -1,3 +1,38 @@
+#
+# Docker Multi-Arch CI Workflow
+#
+# This GitHub Actions workflow automates building and publishing multi-architecture Docker images for the "watcher" project.
+#
+# Triggers:
+#   - On push to the "main" branch
+#   - On pull requests targeting the "main" branch
+#   - On published releases
+#
+# Jobs:
+#   1. build:
+#      - Runs on Ubuntu.
+#      - Uses a matrix to build images for both amd64 and arm64 architectures.
+#      - Logs in to DockerHub using repository secrets.
+#      - Sets a date-based tag for CI builds.
+#      - Extracts Docker image metadata and generates tags for release and CI builds.
+#      - Builds and pushes architecture-specific Docker images with appropriate tags and labels.
+#      - Uses GitHub Actions cache for Docker layers.
+#
+#   2. manifest:
+#      - Runs after the build job, except for pull requests.
+#      - Logs in to DockerHub.
+#      - Creates and pushes multi-architecture Docker manifests for the built images.
+#      - For releases, tags images with the version and "latest".
+#      - For CI builds, tags images with "ci_latest".
+#
+# Environment Variables and Secrets:
+#   - DOCKERHUB_USER: DockerHub username (secret)
+#   - DOCKERHUB_TOKEN: DockerHub access token (secret)
+#
+# Notes:
+#   - The workflow ensures that both release and CI builds are tagged and published for multiple architectures.
+#   - Multi-arch manifests allow users to pull the same image tag regardless of their platform.
+#
 name: Docker Multi-Arch CI
 
 on:
@@ -36,6 +71,11 @@ jobs:
     - name: Set date tag (for CI)
       if: github.event_name != 'release'
       run: echo "DATETAG=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+    # This step uses the docker/metadata-action to generate Docker image metadata and tags.
+    # It dynamically sets image tags based on the GitHub event type:
+    # - For release events, it generates semver-based tags (e.g., v1.2.3, v1.2.3-arch), and 'latest' tags.
+    # - For non-release events (push/PR), it generates CI-specific tags (e.g., ci_latest, ci_latest-arch) and a date-based tag.
+    # The tags are parameterized by architecture using matrix.arch and include both generic and architecture-specific variants.
 
     - name: Extract metadata
       id: meta
@@ -54,6 +94,14 @@ jobs:
           type=raw,value=ci_latest,enable=${{ github.event_name != 'release' }}
           type=raw,value=${{ env.DATETAG }}-${{ matrix.arch }},enable=${{ github.event_name != 'release' }}
 
+    # This step builds and pushes a Docker image for each architecture specified in the matrix.
+    # It uses the docker/build-push-action@v5 action to perform the build and push.
+    # - The build context is set to the current directory.
+    # - The target platform is dynamically set based on the matrix.arch value (e.g., amd64, arm64).
+    # - The image is pushed to the registry after building.
+    # - Tags and labels are provided from the output of a previous 'meta' step.
+    # - The TARGETARCH build argument is set for multi-architecture builds.
+    # - GitHub Actions cache is used for both pulling (cache-from) and pushing (cache-to) build cache to speed up subsequent builds.
     - name: Build and push per arch
       uses: docker/build-push-action@v5
       with:
@@ -64,7 +112,12 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
           TARGETARCH=${{ matrix.arch }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
+# This job, named 'manifest', depends on the completion of the 'build' job.
+# It runs on the latest Ubuntu runner and is skipped for pull request events.
+# The first step logs in to DockerHub using credentials stored in repository secrets.
   manifest:
     needs: build
     runs-on: ubuntu-latest
@@ -76,6 +129,10 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    # This step creates and pushes a multi-architecture Docker manifest for the image.
+    # It prepares the tags to use: "ci_latest" for non-release events, or the release version and "latest" for release events.
+    # For each tag, it creates a manifest that references both the amd64 and arm64 images,
+    # allowing Docker to pull the correct architecture image automatically.
     - name: Create and push multi-arch manifest
       run: |
         # Tags vorbereiten
