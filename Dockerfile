@@ -11,8 +11,9 @@ FROM golang:1.24.4 AS builder
 WORKDIR /app
 COPY watcher.go .
 ARG TARGETARCH
+ARG BUILD_TAG=dev
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH}
-RUN go mod init watcher && go mod tidy && go build -o watcher
+RUN go mod init watcher && go mod tidy && go build -ldflags "-X main.BuildTag=${BUILD_TAG}" -o watcher
 
 FROM scratch
 COPY --from=builder /app/watcher /watcher
