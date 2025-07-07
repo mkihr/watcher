@@ -97,8 +97,8 @@ jobs:
     - name: Extract build tag
       id: buildtag
       run: |
-        # Use the first tag from the list as the build tag
-        TAG=$(echo "${{ steps.meta.outputs.tags }}" | awk -F',' '{print $1}')
+        # Use the first tag from the list as the build tag (newline-separated)
+        TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
         echo "BUILD_TAG=$TAG" >> $GITHUB_ENV
 
     # This step builds and pushes a Docker image for each architecture specified in the matrix.
