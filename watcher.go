@@ -16,6 +16,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// BuildTag holds the build tag/version injected at build time via -ldflags.
+var BuildTag = "dev"
+
 // KubeClient defines an interface for interacting with Kubernetes resources.
 // It provides methods to list pods, retrieve a StatefulSet, and update a StatefulSet
 // within a specified namespace.
@@ -206,6 +209,8 @@ func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string,
 // StatefulSets, sleep and delay intervals from environment variables. It then
 // creates a Kubernetes client and invokes runWatcher with the configured parameters.
 func main() {
+	fmt.Println("Watcher build tag:", BuildTag)
+
 	ns := getenv("WATCH_NAMESPACE", "default")
 	debug := getenv("DEBUG", "false") == "true"
 	targets := strings.Split(os.Getenv("TARGET_STS"), ",")

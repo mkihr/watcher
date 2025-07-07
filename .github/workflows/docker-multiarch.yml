@@ -94,6 +94,13 @@ jobs:
           type=raw,value=ci_latest,enable=${{ github.event_name != 'release' }}
           type=raw,value=${{ env.DATETAG }}-${{ matrix.arch }},enable=${{ github.event_name != 'release' }}
 
+    - name: Extract build tag
+      id: buildtag
+      run: |
+        # Use the first tag from the list as the build tag
+        TAG=$(echo "${{ steps.meta.outputs.tags }}" | awk -F',' '{print $1}')
+        echo "BUILD_TAG=$TAG" >> $GITHUB_ENV
+
     # This step builds and pushes a Docker image for each architecture specified in the matrix.
     # It uses the docker/build-push-action@v5 action to perform the build and push.
     # - The build context is set to the current directory.
@@ -112,6 +119,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
           TARGETARCH=${{ matrix.arch }}
+          BUILD_TAG=${{ env.BUILD_TAG }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
