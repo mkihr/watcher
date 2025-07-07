@@ -86,19 +86,21 @@ func needsRestart(pods []corev1.Pod, debug bool) bool {
 	for _, pod := range pods {
 		for _, cs := range pod.Status.ContainerStatuses {
 			if cs.State.Terminated != nil {
+				msg := fmt.Sprintf("[RESTART] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
 				if debug {
-					fmt.Printf("[DEBUG] Pod %s, Container %s: ExitCode=%d, Reason=%s\n",
-						pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
+					fmt.Println("[DEBUG]", msg)
 				}
 				if cs.State.Terminated.Reason == "OOMKilled" {
+					fmt.Println(msg)
 					return true
 				}
 			}
 			if cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
+				msg := fmt.Sprintf("[RESTART] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.LastTerminationState.Terminated.ExitCode, cs.LastTerminationState.Terminated.Reason)
 				if debug {
-					fmt.Printf("[DEBUG] Pod %s, Container %s: ExitCode=%d, Reason=%s\n",
-						pod.Name, cs.Name, cs.LastTerminationState.Terminated.ExitCode, cs.LastTerminationState.Terminated.Reason)
+					fmt.Println("[DEBUG]", msg)
 				}
+				fmt.Println(msg)
 				return true
 			}
 		}
@@ -143,6 +145,20 @@ func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets 
 
 // -- Main loop, now using the above functions
 
+// runWatcher continuously monitors pods in the specified Kubernetes namespace and triggers a restart
+// of target StatefulSets if certain conditions are met. It periodically checks the pods using the provided
+// KubeClient, and if a restart is needed (as determined by needsRestart), it calls restartStatefulSets.
+// The function sleeps for the specified number of seconds between checks. Debug information is printed
+// if the debug flag is set.
+//
+// Parameters:
+//   - ctx: Context for controlling cancellation and timeouts.
+//   - kc: KubeClient interface for interacting with the Kubernetes API.
+//   - ns: Namespace to monitor.
+//   - targets: List of StatefulSet names to restart if needed.
+//   - sleepSeconds: Number of seconds to sleep between checks.
+//   - delaySeconds: Delay in seconds between restarts of StatefulSets.
+//   - debug: If true, enables verbose logging for debugging purposes.
 func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string, sleepSeconds int, delaySeconds int, debug bool) {
 	for {
 		if debug {
@@ -154,7 +170,22 @@ func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string,
 			continue
 		}
 
-		if needsRestart(pods, debug) {
+		// Filter pods to only those owned by the target StatefulSets
+		filteredPods := make([]corev1.Pod, 0, len(pods))
+		for _, pod := range pods {
+			for _, owner := range pod.OwnerReferences {
+				if owner.Kind == "StatefulSet" {
+					for _, target := range targets {
+						if owner.Name == target {
+							filteredPods = append(filteredPods, pod)
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if needsRestart(filteredPods, debug) {
 			restartStatefulSets(ctx, kc, ns, targets, delaySeconds, debug)
 		} else if debug {
 			fmt.Println("[INFO] No restart needed.")
@@ -169,6 +200,11 @@ func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string,
 
 // -- Main entry point
 
+// main is the entry point of the watcher application. It initializes configuration
+// parameters from environment variables, sets up the Kubernetes client, and starts
+// the watcher loop. The function reads the namespace to watch, debug mode, target
+// StatefulSets, sleep and delay intervals from environment variables. It then
+// creates a Kubernetes client and invokes runWatcher with the configured parameters.
 func main() {
 	ns := getenv("WATCH_NAMESPACE", "default")
 	debug := getenv("DEBUG", "false") == "true"
