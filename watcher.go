@@ -132,7 +132,7 @@ func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets 
 		err = kc.UpdateStatefulSet(ctx, ns, sts)
 		if err != nil {
 			fmt.Println("[ERROR] update sts", name, ":", err)
-		} else if debug {
+		} else {
 			fmt.Println("[INFO] Restarted", name)
 		}
 
@@ -209,13 +209,15 @@ func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string,
 // StatefulSets, sleep and delay intervals from environment variables. It then
 // creates a Kubernetes client and invokes runWatcher with the configured parameters.
 func main() {
-	fmt.Println("Watcher build tag:", BuildTag)
 
 	ns := getenv("WATCH_NAMESPACE", "default")
 	debug := getenv("DEBUG", "false") == "true"
 	targets := strings.Split(os.Getenv("TARGET_STS"), ",")
 	sleepSeconds, _ := strconv.Atoi(getenv("SLEEP_SECONDS", "30"))
 	delaySeconds, _ := strconv.Atoi(getenv("RESTART_DELAY_SECONDS", "30"))
+
+	fmt.Println("Start watching StatefulSets:", targets)
+	fmt.Println("Build tag:", BuildTag)
 
 	config, err := getKubeConfig()
 	if err != nil {
