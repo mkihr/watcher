@@ -89,7 +89,7 @@ func needsRestart(pods []corev1.Pod, debug bool) bool {
 	for _, pod := range pods {
 		for _, cs := range pod.Status.ContainerStatuses {
 			if cs.State.Terminated != nil {
-				msg := fmt.Sprintf("[RESTART] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
+				msg := fmt.Sprintf("[FAILED] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
 				if debug {
 					fmt.Println("[DEBUG]", msg)
 				}
@@ -99,7 +99,7 @@ func needsRestart(pods []corev1.Pod, debug bool) bool {
 				}
 			}
 			if cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
-				msg := fmt.Sprintf("[RESTART] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.LastTerminationState.Terminated.ExitCode, cs.LastTerminationState.Terminated.Reason)
+				msg := fmt.Sprintf("[FAILED] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.LastTerminationState.Terminated.ExitCode, cs.LastTerminationState.Terminated.Reason)
 				if debug {
 					fmt.Println("[DEBUG]", msg)
 				}
