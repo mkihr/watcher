@@ -42,7 +42,7 @@ spec:
           value: "true"
         - name: SLEEP_SECONDS
           value: "60"
-        image: mkihr1/watcher:ci_latest-arm64
+        image: mkihr1/watcher:latest
         imagePullPolicy: Always
         name: watcher
         resources:
