@@ -81,6 +81,12 @@ func (r *RealKubeClient) UpdateStatefulSet(ctx context.Context, ns string, sts *
 
 // -- Refactored logic functions:
 
+// logWithTimestamp prints a message with a timestamp prefix.
+func logWithTimestamp(format string, a ...interface{}) {
+	ts := time.Now().Format("2006-01-02 15:04:05")
+	fmt.Printf("[%s] %s\n", ts, fmt.Sprintf(format, a...))
+}
+
 // needsRestart checks a slice of Kubernetes pods to determine if any of their containers
 // have been terminated due to an out-of-memory (OOMKilled) event or have previously exited
 // with code 137 (commonly indicating an OOM kill). It returns true if any such condition
@@ -91,19 +97,19 @@ func needsRestart(pods []corev1.Pod, debug bool) bool {
 			if cs.State.Terminated != nil {
 				msg := fmt.Sprintf("[FAILED] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.State.Terminated.ExitCode, cs.State.Terminated.Reason)
 				if debug {
-					fmt.Println("[DEBUG]", msg)
+					logWithTimestamp("[DEBUG] %s", msg)
 				}
 				if cs.State.Terminated.Reason == "OOMKilled" {
-					fmt.Println(msg)
+					logWithTimestamp("%s", msg)
 					return true
 				}
 			}
 			if cs.RestartCount > 0 && cs.LastTerminationState.Terminated != nil {
 				msg := fmt.Sprintf("[FAILED] Pod %s, Container %s: ExitCode=%d, Reason=%s", pod.Name, cs.Name, cs.LastTerminationState.Terminated.ExitCode, cs.LastTerminationState.Terminated.Reason)
 				if debug {
-					fmt.Println("[DEBUG]", msg)
+					logWithTimestamp("[DEBUG] %s", msg)
 				}
-				fmt.Println(msg)
+				logWithTimestamp("%s", msg)
 				return true
 			}
 		}
@@ -120,7 +126,7 @@ func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets 
 	for i, name := range targets {
 		sts, err := kc.GetStatefulSet(ctx, ns, name)
 		if err != nil {
-			fmt.Println("[ERROR] get sts", name, ":", err)
+			logWithTimestamp("[ERROR] get sts %s : %v", name, err)
 			continue
 		}
 
@@ -131,15 +137,15 @@ func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets 
 
 		err = kc.UpdateStatefulSet(ctx, ns, sts)
 		if err != nil {
-			fmt.Println("[ERROR] update sts", name, ":", err)
+			logWithTimestamp("[ERROR] update sts %s : %v", name, err)
 		} else {
-			fmt.Println("[INFO] Restarted", name)
+			logWithTimestamp("[INFO] Restarted %s", name)
 		}
 
 		// Delay for delaySeconds after the first target before restarting others
 		if i == 0 && len(targets) > 1 {
 			if debug {
-				fmt.Println("[INFO] Waiting ", delaySeconds, " seconds before restarting next StatefulSet...")
+				logWithTimestamp("[INFO] Waiting %d seconds before restarting next StatefulSet...", delaySeconds)
 			}
 			time.Sleep(time.Duration(delaySeconds) * time.Second)
 		}
@@ -165,11 +171,11 @@ func restartStatefulSets(ctx context.Context, kc KubeClient, ns string, targets 
 func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string, sleepSeconds int, delaySeconds int, debug bool) {
 	for {
 		if debug {
-			fmt.Println("[INFO] Checking pods in namespace:", ns)
+			logWithTimestamp("[INFO] Checking pods in namespace: %s", ns)
 		}
 		pods, err := kc.ListPods(ctx, ns)
 		if err != nil {
-			fmt.Println("[ERROR] listing pods:", err)
+			logWithTimestamp("[ERROR] listing pods: %v", err)
 			continue
 		}
 
@@ -191,11 +197,11 @@ func runWatcher(ctx context.Context, kc KubeClient, ns string, targets []string,
 		if needsRestart(filteredPods, debug) {
 			restartStatefulSets(ctx, kc, ns, targets, delaySeconds, debug)
 		} else if debug {
-			fmt.Println("[INFO] No restart needed.")
+			logWithTimestamp("[INFO] No restart needed.")
 		}
 
 		if debug {
-			fmt.Printf("[INFO] Sleeping for %ds...\n", sleepSeconds)
+			logWithTimestamp("[INFO] Sleeping for %ds...", sleepSeconds)
 		}
 		time.Sleep(time.Duration(sleepSeconds) * time.Second)
 	}
@@ -216,8 +222,8 @@ func main() {
 	sleepSeconds, _ := strconv.Atoi(getenv("SLEEP_SECONDS", "30"))
 	delaySeconds, _ := strconv.Atoi(getenv("RESTART_DELAY_SECONDS", "30"))
 
-	fmt.Println("Start watching StatefulSets:", targets)
-	fmt.Println("Build tag:", BuildTag)
+	logWithTimestamp("Start watching StatefulSets: %v", targets)
+	logWithTimestamp("Build tag: %s", BuildTag)
 
 	config, err := getKubeConfig()
 	if err != nil {
